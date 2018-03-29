@@ -1,0 +1,95 @@
+
+require('dotenv').config({ path: process.env.ENV_FILE, silent: 'true' });
+
+let app = require('../app'),
+    debug = require('debug')('server-starter-kit:server'),
+    http = require('http'),
+    logger = require('../utils/logger'),
+    db = require('../utils/db');
+
+let port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+let server = http.createServer(app);
+
+db.init()
+    .then(() => {
+        server.listen(port);
+        logger.info('Server is running on port ', port);
+    })
+    .catch(err => {
+        logger.error(err);
+        process.exit(1);
+    });
+
+let signals = {
+    'SIGHUP': 1,
+    'SIGINT': 2,
+    'SIGTERM': 15
+};
+
+const shutdown = (signal, value) => {
+    server.close(() => {
+        logger.info(`server stopped by ${signal} with value ${value}`);
+        process.exit(128 + value);
+    });
+};
+
+Object.keys(signals).forEach((signal) => {
+    process.on(signal, () => {
+        logger.info(`process received a ${signal} signal`);
+        shutdown(signal, signals[signal]);
+    });
+});
+
+server.on('error', onError);
+server.on('listening', onListening);
+
+function normalizePort(val) {
+  let port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      logger.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      logger.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+
+function onListening() {
+  let addr = server.address();
+  let bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
